@@ -1,0 +1,27 @@
+name: sp500-prediction-env
+channels:
+  - conda-forge
+dependencies:
+
+  # The Works
+  - python=3.11
+  - numpy
+  - pandas
+  - matplotlib
+  - ipykernel
+
+  # Web Scraping
+  - beautifulsoup4
+  - requests
+  - grequests
+
+  # Finance Data
+  - yfinance
+  - alpha_vantage
+
+  # Machine Learning
+  - tensorflow
+  - scikit-learn
+
+  # Secrets
+  - python-dotenv
