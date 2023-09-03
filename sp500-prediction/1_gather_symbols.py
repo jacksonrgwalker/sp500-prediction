@@ -11,4 +11,4 @@ symbols['symbol'] = symbols['symbol'].str.strip().str.replace(".", "-", regex=Fa
 
 # Save the table
 symbols_save_path = Path("data/symbols.parquet")
-symbols.to_parquet(symbols_save_path, index=False)
+symbols.to_parquet(symbols_save_path)
