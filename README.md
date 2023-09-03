@@ -38,3 +38,8 @@ The code is set up as a python package with modules. All code should be run from
 
 I recomend you configure your IDE to run the code this way instead of running the files directly from the command line.
 
+# Development
+
+## Data Format
+
+We use the parquet format to store our data. This is a columnar format that is optimized for analytics. It is also a compressed format, so it takes up less space than a csv. It is performant and works well with pandas. 

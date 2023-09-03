@@ -25,3 +25,6 @@ dependencies:
 
   # Secrets
   - python-dotenv
+
+  # Other
+  - pyarrow
