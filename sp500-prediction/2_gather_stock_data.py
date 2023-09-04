@@ -17,9 +17,8 @@ ohlc_tables = {}
 # tqdm for fancy progress bar
 progress_bar = tqdm(symbols_to_gather, desc="Gathering stock data")
 for symbol in progress_bar:
-
     # Show current symbol in progress bar
-    progress_bar.set_postfix_str(symbol.ljust(5, ' '))
+    progress_bar.set_postfix_str(symbol.ljust(5, " "))
 
     # API call to Alpha Vantage to get daily adjusted OHLC data
     ohlc, _meta_data = ts.get_daily_adjusted(symbol=symbol, outputsize="full")
