@@ -4,6 +4,9 @@ import pandas as pd
 from alpha_vantage.timeseries import TimeSeries
 from tqdm import tqdm
 
+from dotenv import load_dotenv
+assert load_dotenv(), "Failed to load .env file"
+
 # Load symbols table
 symbols_save_path = Path("data/symbols.parquet")
 symbols = pd.read_parquet(symbols_save_path)
