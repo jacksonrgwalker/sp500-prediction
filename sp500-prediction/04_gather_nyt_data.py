@@ -1,4 +1,3 @@
-import json
 import os
 from pathlib import Path
 
@@ -7,6 +6,7 @@ import requests
 from dotenv import load_dotenv
 from requests.adapters import Retry
 from tqdm import tqdm
+from datetime import datetime
 
 assert load_dotenv(), "Failed to load .env file"
 
@@ -68,9 +68,15 @@ url = (
 # Loop through each year and month combination
 progress_bar = tqdm(year_months, desc="Gathering NYT data")
 for year, month in progress_bar:
+
     # Show current year and month in the progress bar
     progress_bar.set_postfix_str(f"{year:04}-{month:02}")
 
+    # if at or after current year and month, skip
+    if datetime(year, month, 1) >= datetime.now():
+        progress_bar.write(f"Skipped {year}-{month}, current month or later")
+        continue
+    
     # Check if the Parquet file for the current year and month exists
     folder = Path(f"data/NYT/{year:04}")
 
@@ -83,7 +89,6 @@ for year, month in progress_bar:
     # Skip the current year and month if the Parquet file already exists
     if os.path.exists(filepath):
         progress_bar.write(f"Skipped {year}-{month}, file already exists")
-        progress_bar.update(1)
         continue
 
     # Format the API endpoint URL with the current year and month
@@ -93,7 +98,7 @@ for year, month in progress_bar:
     response = session.get(endpoint)
 
     # Convert the response to a JSON object
-    data = json.loads(response.text)
+    data = response.json()
 
     # Extract the articles from the JSON object
     articles = data["response"]["docs"]
@@ -114,6 +119,5 @@ for year, month in progress_bar:
     df.to_parquet(filepath)
 
     progress_bar.write(f"Saved {year:04}-{month:02} to {filepath}")
-    progress_bar.update(1)
 
 print("Done downloading NYT data")
