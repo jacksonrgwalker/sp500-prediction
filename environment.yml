@@ -10,6 +10,9 @@ dependencies:
   - matplotlib
   - ipykernel
 
+  # Parallel Computing
+  - dask
+
   # Web Scraping
   - beautifulsoup4
   - requests
@@ -26,10 +29,17 @@ dependencies:
   # Secrets
   - python-dotenv
 
+  # LLMs / NLP
+  - openai
+  - tiktoken
+  - nltk
+
   # Other
   - pyarrow
   - tqdm
   - ipywidgets
+  - jinja2
   - pip
   - pip:
     - stockstats
+    - pylcs
