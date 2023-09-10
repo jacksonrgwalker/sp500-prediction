@@ -35,6 +35,10 @@ for symbol in progress_bar:
 # Combine all tables into one
 ohlc_all = pd.concat(ohlc_tables)
 ohlc_all.index.set_names(["symbol", "date"], inplace=True)
+ohlc = ohlc.reset_index()
+ohlc['date'] = pd.to_datetime(ohlc['date'])
+ohlc['symbol'] = ohlc['symbol'].astype('category')
+ohlc = ohlc.set_index(['symbol', 'date'])
 
 # Convert to correct data types
 ohlc_dtypes = {
