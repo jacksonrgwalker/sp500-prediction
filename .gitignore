@@ -1,6 +1,7 @@
 data_untracked/*
 data/*
 sandbox/*
+testing.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
