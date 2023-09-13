@@ -59,8 +59,9 @@ all_symbols.drop(columns=["security_old"], inplace=True)
 all_symbols["date_added"].fillna(all_symbols["date_added_old"], inplace=True)
 all_symbols.drop(columns=["date_added_old"], inplace=True)
 
-# Keep only symbols added after 2000
-all_symbols = all_symbols[all_symbols["date_added"] >= "2000-01-01"]
+added_after_2000 = all_symbols["date_added"] >= "2000-01-01"
+unknown_date_added = all_symbols["date_added"].isna()
+all_symbols = all_symbols[added_after_2000 | unknown_date_added]
 
 dtypes = {
     "symbol": pd.StringDtype(),
