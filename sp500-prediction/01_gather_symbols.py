@@ -75,6 +75,9 @@ dtypes = {
 
 all_symbols = all_symbols.astype(dtypes)
 
+assert 'MMM' in all_symbols['symbol'].values, "MMM not in all_symbols"
+assert len(all_symbols) > 500, "all_symbols has less than 500 rows"
+
 # Save the table
 symbols_save_path = Path("data/symbols.parquet")
 all_symbols.to_parquet(symbols_save_path)
