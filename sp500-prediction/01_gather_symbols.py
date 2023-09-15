@@ -59,9 +59,9 @@ all_symbols.drop(columns=["security_old"], inplace=True)
 all_symbols["date_added"].fillna(all_symbols["date_added_old"], inplace=True)
 all_symbols.drop(columns=["date_added_old"], inplace=True)
 
-added_after_2000 = all_symbols["date_added"] >= "2000-01-01"
-unknown_date_added = all_symbols["date_added"].isna()
-all_symbols = all_symbols[added_after_2000 | unknown_date_added]
+removed_before_2000 = all_symbols["date_removed"] < "2000-01-01"
+unknown_date_removed = all_symbols["date_removed"].isna()
+all_symbols = all_symbols[(~removed_before_2000) | unknown_date_removed]
 
 dtypes = {
     "symbol": pd.StringDtype(),
@@ -74,6 +74,9 @@ dtypes = {
 }
 
 all_symbols = all_symbols.astype(dtypes)
+
+assert 'MMM' in all_symbols['symbol'].values, "MMM not in all_symbols"
+assert len(all_symbols) > 500, "all_symbols has less than 500 rows"
 
 # Save the table
 symbols_save_path = Path("data/symbols.parquet")
