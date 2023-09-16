@@ -1,49 +1,47 @@
 # Load in packages
-import tensorflow as tf
-import keras
-import keras.optimizers
+
+# Classics
 import numpy as np
 import pandas as pd
 from pathlib import Path
+
+# Machine Learning
+import tensorflow as tf
+import keras
+import keras.optimizers
 from keras import Sequential
 from keras.layers import Dense, Dropout, Input
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
-from keras_tuner.tuners import RandomSearch
+
+# Built-ins
 from copy import deepcopy as dc
+from random import choice
 
 # Create a neural net function to train the hyperparameters
 def build_model(hp):
     model = keras.Sequential()
-    model.add(Input(shape=(SX_train_tens.shape[1],)))  # Specify the input size here
-
-    # Tune the number of layers
-    hidden_layers = hp.Int('hidden_layers', min_value=2, max_value=4, step=1)
+    model.add(Input(shape=(SX_train.shape[1],)))  # Specify the input size here
 
     # Tune the number of neurons per layer
-    for i in range(hidden_layers):
-        units = hp.Int(f'units_{i+1}', min_value=32, max_value=512, step=32)
-        activation_H = hp.Choice(f'activation_{i+1}', ['relu', 'tanh'])
-        dropout_rate = hp.Float(f'dropout_{i+1}', min_value=0.0, max_value=0.5, step=0.1)
+    for i in range(hp.Int('layers', min_value=1, max_value=3)):
 
         # Add dropout layer and tune the dropout rate
-        model.add(Dense(units=units, activation=activation_H))
-        model.add(Dropout(rate=dropout_rate))
+        model.add(Dense(units=hp.Int(f'units_{i+1}', min_value=32, max_value=512, step=32),
+                        activation=hp.Choice(f'activation_{i+1}', ['relu', 'tanh'])))
+        model.add(Dropout(rate=hp.Float(f'dropout_{i+1}',
+                                        min_value=0.0, max_value=0.5, step=0.1)))
 
     # Output layer with a single neuron and sigmoid activation for binary classification
     model.add(Dense(1, activation='linear'))
-
-    # Tune the learning rate
-    hp_learning_rate = hp.Choice('learning_rate', values=[1e-3, 1e-4])
 
     # Tune the batch size
     batch_size = hp.Int('batch_size', min_value=16, max_value=128, step=16)
 
     # Compile the model
-    model.compile(optimizer=keras.optimizers.Adam(learning_rate=hp_learning_rate),
-                  loss='mean_squared_error',
-                  metrics=['mean_squared_error'])
+    model.compile(optimizer=hp.Choice('Optimizer', values=['SGD', 'adam']),
+        loss='mean_squared_error',
+        metrics=['mean_squared_error'])
 
     return model
 
@@ -51,25 +49,25 @@ class NeuralNetwork():
     def __init__(self):
         self.model = Sequential()
 
-    def build(self, layers, npl, input_shape, drop_percent):
+    def build(self, layers, npl, LA, drop_percent, input_shape):
+
+        # Add input layer
+        self.model.add(Input(shape=(input_shape,)))
 
         # Add a certian number of layers
         for i in range(layers):
-            if i == 0:
-                self.model.add(Dense(npl[i], input_shape=(input_shape, ), activation='relu'))
-            else:
-                self.model.add(Dense(npl[i], activation='relu'))
-
-            self.model.add(Dropout(drop_percent))
+            self.model.add(Dense(npl[i], activation=LA[i]))
+            self.model.add(Dropout(rate=drop_percent[i]))
 
         # Output layer for the binary classification task
         self.model.add(Dense(1, activation='sigmoid'))
 
-    def compile(self, optimizer, loss, metrics=['mean_squared_error']):
+    def compile(self, optimizer, loss, metrics=['accuracy']):
         self.model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
-    def train(self, x_train, y_train, batch_size, epochs, validation_data=None):
-        history = self.model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, validation_data=validation_data)
+    def train(self, x_train, y_train, batch_size, epochs, CBs=None, validation_data=None, verbose=1):
+        history = self.model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs,
+                                 callbacks=CBs, validation_data=validation_data, verbose=verbose)
         return history
 
     def evaluate(self, x_test, y_test):
@@ -78,8 +76,15 @@ class NeuralNetwork():
     def predict(self, x):
         return self.model.predict(x)
 
+# Check if GPU is available for GPU
+if tf.test.gpu_device_name():
+    print("GPU is available, but turning it off for this network")
+    tf.config.set_visible_devices([], 'GPU')
+else:
+    print("GPU is NOT available, continuing with CPU")
+
 # Load in the dataframe with the indicators and the embeddings
-FE = "data (new implementation)/sentiment_exploration.parquet"
+FE = "data (new implementation)/sentiment_exploration (1).parquet"
 OD = Path.cwd()
 DF_path = OD / FE
 DF = pd.read_parquet(DF_path)
@@ -99,43 +104,92 @@ Returns_DF = DF_Agg.loc[:, ACNs[0:14]]
 Y = Returns_DF.iloc[:, 2]
 
 # Apply the custom function to create the new column
-# YC = np.where(Y < 0, 0, 1)
-YC = dc(Y).to_numpy()
+YC = np.where(Y < 0, 0, 1)
+# YC = dc(Y).to_numpy()
 
 # Split the data into train and test
-X_train, X_test, y_train, y_test = train_test_split(X, YC, test_size=0.05)
+X_train, X_test, y_train, y_test = train_test_split(X, YC, test_size=0.20)
 
 # Scale the data with a standard scaler
 scaler1 = MinMaxScaler(feature_range=(-1,1))
 scaler2 = StandardScaler()
 
 # Tensors for tensorflow
-SX_train_tens = tf.convert_to_tensor(scaler2.fit_transform(X_train).astype(np.float32))
-y_train_tens = tf.convert_to_tensor(scaler1.fit_transform(y_train.reshape(-1, 1)).astype(np.float32))
-SX_test_tens = tf.convert_to_tensor(scaler2.fit_transform(X_test).astype(np.float32))
-y_test_tens = tf.convert_to_tensor(scaler1.fit_transform(y_test.reshape(-1, 1)).astype(np.float32))
+SX_train = scaler2.fit_transform(X_train).astype(np.float32)
+SX_test = scaler2.fit_transform(X_test).astype(np.float32)
 
-# Search for optimal hyperparameters
-tuner = RandomSearch(
-    build_model,
-    objective='val_loss',
-    max_trials=100,
-    executions_per_trial=1)
+# Define a list of hyperparameters to test
+HP = {
+    'Optimizer': ['SGD', 'Adam', 'RMSprop', 'Nadam', 'Adagrad', 'Adadelta'],
+    'HLs': [1, 2],
+    'NPL': [int(i*32) for i in range(1,31)],
+    'DR': [0.0, 0.10, 0.20],
+    'batch_size': [int(i*10) for i in range(1,11)],
+    'AF': ['relu', 'tanh', 'sigmoid']
+}
+
+# Try 1000 different combinations of the hyperparameters and see if we can get something that fits well
+combs = 500
+cc = 1
+SCs = []
+epochs = 25
+MVA = 0
+
+accuracy_ = tf.keras.metrics.BinaryAccuracy(
+    name='binary_accuracy', dtype=None, threshold=0.5
+)
 
 # Define the EarlyStopping callback
 early_stopping = tf.keras.callbacks.EarlyStopping(
-    monitor='val_loss',  # Monitor validation loss
-    patience=5,            # Number of epochs with no improvement before stopping
-    restore_best_weights=False  # Restore the best model weights
+    monitor='val_'+accuracy_.name,
+    patience=10,
+    restore_best_weights=False
 )
 
-tuner.search(SX_train_tens, y_train_tens, epochs=100,
-             validation_data=(SX_test_tens, y_test_tens), callbacks=[early_stopping])
+for i in range(combs):
 
-# Print out stats on the best model
-print(tuner.results_summary())
+    # Choose the hyperparameters randomly and append the list to a dictionary
+    CPs = {}
+    CPs['CO'] = choice(HP['Optimizer']) # Optimizer
+    CPs['CBS'] = choice(HP['batch_size']) # Batch size
+    CPs['CLs'] = choice(HP['HLs'])  # Layers
+    CPs['CNPLs'] = [choice(HP['NPL']) for i in range(CPs['CLs'])]   # Nodes per layer
+    CPs['CDRs'] = [choice(HP['DR']) for i in range(CPs['CLs'])]     # Dropout per layer
+    CPs['CAs'] = [choice(HP['AF']) for i in range(CPs['CLs'])]      # Activation function per layer
 
-# best_models = tuner.get_best_models(num_models=1)
-# test_loss, test_acc = best_models[0].evaluate(SX_test_tens, y_test_tens)
-# print('Test accuracy:', test_acc)
+    attempts = 0
+    while CPs in SCs and attempts < 10:
+        CPs['CLs'] = choice(HP['HLs'])
+        CPs['CNPLs'] = [choice(HP['NPL']) for i in range(CPs['CLs'])]
+        CPs['CDRs'] = [choice(HP['DR']) for i in range(CPs['CLs'])]
+        CPs['CAs'] = [choice(HP['AF']) for i in range(CPs['CLs'])]
+        attempts += 1
 
+    # Couldn't find a new combination to try
+    if attempts == 10:
+        break
+
+    # Print out the combination and the iteration we're on then store the current combination
+    print(f'The best validation accuracy thus far is {MVA}')
+    print('')
+    print(f'Trying combination {i}: {CPs}')
+    print('')
+    SCs.append(CPs)
+
+    model = NeuralNetwork()
+    model.build(CPs['CLs'], CPs['CNPLs'], CPs['CAs'], CPs['CDRs'], SX_train.shape[1])
+    model.compile(CPs['CO'], loss='binary_crossentropy', metrics=[accuracy_])
+    hist = model.train(x_train=SX_train, y_train=y_train, epochs=epochs, batch_size=CPs['CBS'],
+                       validation_data=(SX_test, y_test), CBs=[early_stopping])
+
+    if np.max(hist.history['val_'+accuracy_.name]) > MVA:
+        Best_params = CPs
+        MVA = np.max(hist.history['val_'+accuracy_.name])
+
+    print('=====================================================================')
+    print('')
+
+best_model = NeuralNetwork()
+best_model.build(Best_params['CLs'], Best_params['CNPLs'], Best_params['CAs'], Best_params['CDRs'], SX_train.shape[1])
+best_model.compile(CPs['CO'], loss='binary_crossentropy', metrics=['accuracy'])
+best_model.save('Best_model.H5')
