@@ -8,12 +8,12 @@ from copy import deepcopy
 
 # Load in the dataframe with OHLC data as well as Fama-French 5-Factor data
 operating_directory = Path.cwd()
-FF_file_extension = "data/F-F_Research_Data_5_Factors_2x3_daily.CSV"
-OHLC_file_extension = "data/ohlc.parquet"
+ff_file_extension = "data/F-F_Research_Data_5_Factors_2x3_daily.CSV"
+ohlc_file_extension = "data/ohlc.parquet"
 
-ff_df = pd.read_csv(operating_directory / FF_file_extension)
+ff_df = pd.read_csv(operating_directory / ff_file_extension)
 
-ohlc_df = pd.read_parquet(operating_directory / OHLC_file_extension)
+ohlc_df = pd.read_parquet(operating_directory / ohlc_file_extension)
 
 # Format Fama-French DataFrame
 ff_df[ff_df.columns[0]] = pd.to_datetime(ff_df[ff_df.columns[0]], format='%Y%m%d')
@@ -58,6 +58,9 @@ for ticker in progress_bar:
 
         coefficients_df = pd.DataFrame(results.params, index=stock_specific_df.index,
                                        columns=column_names).dropna()
+
+        coefficients_df['idosynchratic_change'] = coefficients_df['beta_idosynchratic'].pct_change(-1)
+        coefficients_df.dropna(inplace=True)
 
         if counter == 1:
             beta_df = deepcopy(coefficients_df)

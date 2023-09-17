@@ -21,7 +21,7 @@ from random import choice
 # Create a neural net function to train the hyperparameters
 def build_model(hp):
     model = keras.Sequential()
-    model.add(Input(shape=(SX_train.shape[1],)))  # Specify the input size here
+    model.add(Dense(shape=(SX_train.shape[1],)))  # Specify the input size here
 
     # Tune the number of neurons per layer
     for i in range(hp.Int('layers', min_value=1, max_value=3)):
@@ -52,12 +52,12 @@ class NeuralNetwork():
     def build(self, layers, npl, LA, drop_percent, input_shape):
 
         # Add input layer
-        self.model.add(Input(shape=(input_shape,)))
+        self.model.add(Dense(units=input_shape, input_shape=(input_shape,), activation = 'relu'))
 
         # Add a certian number of layers
-        for i in range(layers):
-            self.model.add(Dense(npl[i], activation=LA[i]))
-            self.model.add(Dropout(rate=drop_percent[i]))
+        for i in range(1, layers):
+            self.model.add(Dense(npl[i-1], activation=LA[i-1]))
+            self.model.add(Dropout(rate=drop_percent[i-1]))
 
         # Output layer for the binary classification task
         self.model.add(Dense(1, activation='sigmoid'))
@@ -77,34 +77,41 @@ class NeuralNetwork():
         return self.model.predict(x)
 
 # Check if GPU is available for GPU
-if tf.test.gpu_device_name():
-    print("GPU is available, but turning it off for this network")
-    tf.config.set_visible_devices([], 'GPU')
-else:
-    print("GPU is NOT available, continuing with CPU")
+# if tf.test.gpu_device_name():
+#     print("GPU is available, but turning it off for this network")
+#     tf.config.set_visible_devices([], 'GPU')
+# else:
+#     print("GPU is NOT available, continuing with CPU")
 
-# Load in the dataframe with the indicators and the embeddings
-FE = "data/sentiment_exploration (1).parquet"
-OD = Path.cwd()
-DF_path = OD / FE
-DF = pd.read_parquet(DF_path)
+# Load in the dataframe with OHLC data as well as Fama-French 5-Factor data
+operating_directory = Path.cwd()
+embedding_file_extension = "data/sentiment_exploration (1).parquet"
+beta_file_extension = "data/beta.parquet"
+
+embedding_df = pd.read_parquet(operating_directory / embedding_file_extension)
+column_names = embedding_df.columns
+embedding_df = embedding_df.drop(column_names[0], axis=1).groupby([column_names[1],
+                                column_names[2]]).mean().dropna()
+
+beta_df = pd.read_parquet(operating_directory / beta_file_extension)
+
+# Join on both multi-indices
+multi_index_names = embedding_df.index.names
+combined_df = embedding_df.join(beta_df, on=multi_index_names)
+combined_df.dropna(inplace=True)
 
 # Aggregate news to a single embedding per day, per ticker, by averaging embeddings if
 # the same ticker has multiple articles for a single day
-CNs = DF.columns
-DF_Agg = DF.drop(CNs[0], axis=1).groupby([CNs[2], CNs[1]]).mean().dropna()
-ACNs = DF_Agg.columns
+combined_column_names = combined_df.columns
 
 # Split the data into dependent and independent variable sets
-X = DF_Agg.loc[:, ACNs[15:]].to_numpy()
+X = combined_df.loc[:, combined_column_names[15:]].to_numpy()
 
 # Try the next day returns as the only dependent variable
-Returns_DF = DF_Agg.loc[:, ACNs[0:14]]
-# Y = Returns_DF.iloc[:, 2]
-Y = Returns_DF.iloc[:, 2]
+dependent_df = combined_df['idosynchratic_change']
 
 # Apply the custom function to create the new column
-YC = np.where(Y < 0, 0, 1)
+YC = np.where(dependent_df < 0, 0, 1)
 # YC = dc(Y).to_numpy()
 
 # Split the data into train and test
@@ -120,8 +127,8 @@ SX_test = scaler2.fit_transform(X_test).astype(np.float32)
 
 # Define a list of hyperparameters to test
 HP = {
-    'Optimizer': ['SGD', 'Adam', 'RMSprop', 'Nadam', 'Adagrad', 'Adadelta'],
-    'HLs': [1, 2],
+    'Optimizer': ['SGD', 'Adam'],#, 'RMSprop', 'Nadam', 'Adagrad', 'Adadelta'],
+    'HLs': [1],
     'NPL': [int(i*32) for i in range(1,31)],
     'DR': [0.0, 0.10, 0.20],
     'batch_size': [int(i*10) for i in range(1,11)],
@@ -142,7 +149,7 @@ accuracy_ = tf.keras.metrics.BinaryAccuracy(
 # Define the EarlyStopping callback
 early_stopping = tf.keras.callbacks.EarlyStopping(
     monitor='val_'+accuracy_.name,
-    patience=10,
+    patience=5,
     restore_best_weights=False
 )
 
@@ -153,16 +160,16 @@ for i in range(combs):
     CPs['CO'] = choice(HP['Optimizer']) # Optimizer
     CPs['CBS'] = choice(HP['batch_size']) # Batch size
     CPs['CLs'] = choice(HP['HLs'])  # Layers
-    CPs['CNPLs'] = [choice(HP['NPL']) for i in range(CPs['CLs'])]   # Nodes per layer
-    CPs['CDRs'] = [choice(HP['DR']) for i in range(CPs['CLs'])]     # Dropout per layer
-    CPs['CAs'] = [choice(HP['AF']) for i in range(CPs['CLs'])]      # Activation function per layer
+    CPs['CNPLs'] = [choice(HP['NPL']) for i in range(CPs['CLs']-1)]   # Nodes per layer
+    CPs['CDRs'] = [choice(HP['DR']) for i in range(CPs['CLs']-1)]     # Dropout per layer
+    CPs['CAs'] = [choice(HP['AF']) for i in range(CPs['CLs']-1)]      # Activation function per layer
 
     attempts = 0
     while CPs in SCs and attempts < 10:
         CPs['CLs'] = choice(HP['HLs'])
-        CPs['CNPLs'] = [choice(HP['NPL']) for i in range(CPs['CLs'])]
-        CPs['CDRs'] = [choice(HP['DR']) for i in range(CPs['CLs'])]
-        CPs['CAs'] = [choice(HP['AF']) for i in range(CPs['CLs'])]
+        CPs['CNPLs'] = [choice(HP['NPL']) for i in range(CPs['CLs']-1)]
+        CPs['CDRs'] = [choice(HP['DR']) for i in range(CPs['CLs']-1)]
+        CPs['CAs'] = [choice(HP['AF']) for i in range(CPs['CLs']-1)]
         attempts += 1
 
     # Couldn't find a new combination to try
