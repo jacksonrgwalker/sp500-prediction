@@ -19,17 +19,19 @@ ohlc_df = pd.read_parquet(operating_directory / OHLC_file_extension)
 ff_df[ff_df.columns[0]] = pd.to_datetime(ff_df[ff_df.columns[0]], format='%Y%m%d')
 ff_df.set_index(ff_df.columns[0], inplace=True, drop=True)
 
-# Perform rolling OLS with the FF 5-Factor Model data
+# Join the FF data and OHLC data
 multi_index_names = ohlc_df.index.names
+combined_df = ohlc_df.join(ff_df, on=[multi_index_names[1]])
+
+# Perform rolling OLS with the FF 5-Factor Model data
 ticker_list = ohlc_df.index.get_level_values(multi_index_names[0]).unique()
 rolling_window_length = 50
 
 # Create DataFrame to store 5-Factor coefficients
-column_names = ['beta_' + str(i) for i in range(6)]
+factors = ['idosynchratic']
+factors.extend(ff_df.columns[:-1])
+column_names = ['beta_' + factors[i] for i in range(len(factors))]
 counter = 1
-
-# The last date in the FF data file
-max_ff_date = np.max(ff_df.index)
 
 progress_bar = tqdm(ticker_list, desc="Calculating coeffs for stocks")
 for ticker in progress_bar:
@@ -37,36 +39,31 @@ for ticker in progress_bar:
     # Show current symbol in progress bar
     progress_bar.set_postfix_str(ticker.ljust(5, " "))
 
-    # Build a DataFrame for simple returns for the current stock and for the correct dates
-    returns_df = ohlc_df[(ohlc_df.index.get_level_values(multi_index_names[0])
-                                    == ticker) & (ohlc_df.index.get_level_values(multi_index_names[1])
-                                    <= max_ff_date)]['adjusted_close'].to_frame()
+    stock_specific_df = deepcopy(combined_df[combined_df.index.get_level_values(multi_index_names[0]) == ticker])
 
-    returns_df['simple_return'] = (returns_df['adjusted_close']
-                                         / returns_df['adjusted_close'].shift(1) - 1)
+    stock_specific_df['excess_simple_returns'] = (stock_specific_df['adjusted_close'] \
+                                          / stock_specific_df['adjusted_close'].shift(1) - 1.0) \
+                                          - stock_specific_df['RF']
 
-    # Reduce the FF data to only the dates contained within the current stock
-    ticker_min_date = np.min(returns_df.index.get_level_values(multi_index_names[1]))
-    ticker_max_date = np.max(returns_df.index.get_level_values(multi_index_names[1]))
-    timed_FF_df = ff_df[(ff_df.index >= ticker_min_date) & (ff_df.index <= ticker_max_date)]
+    stock_specific_df.dropna(inplace=True)
 
-    # Join the FF data and returns DataFrame to efficiently remove NA from both datasets before
-    # OLS fitting
-    fit_df = returns_df.join(timed_FF_df, on=[multi_index_names[1]]).iloc[:,1:].dropna()
-    X = add_constant(fit_df.iloc[:,1:-1]).to_numpy()
-    y = fit_df.iloc[:,0].to_numpy()
+    # Form independent and dependent variable matrices
+    X = add_constant(stock_specific_df[factors[1:]]/100).to_numpy()
+    y = np.expand_dims(stock_specific_df['excess_simple_returns'].to_numpy(), axis=1)
 
-    # Fit the linear model and save the coefficients
-    results = RollingOLS(endog=y, exog=X, window=rolling_window_length).fit()
+    # Fit the linear model and save the coefficients if the stock has enough data
+    if (X.shape[0] > rolling_window_length) and (y.shape[0] > rolling_window_length):
 
-    coefficients_df = pd.DataFrame(results.params, index=fit_df.index,
-                                   columns=column_names).dropna()
+        results = RollingOLS(endog=y, exog=X, window=rolling_window_length, min_nobs=10, expanding=True).fit()
 
-    if counter == 1:
-        beta_df = deepcopy(coefficients_df)
-        counter += 1
-    else:
-        beta_df = pd.concat([beta_df, coefficients_df])
+        coefficients_df = pd.DataFrame(results.params, index=stock_specific_df.index,
+                                       columns=column_names).dropna()
+
+        if counter == 1:
+            beta_df = deepcopy(coefficients_df)
+            counter += 1
+        else:
+            beta_df = pd.concat([beta_df, coefficients_df])
 
 # Save the table
 beta_save_path = Path("data/beta.parquet")
