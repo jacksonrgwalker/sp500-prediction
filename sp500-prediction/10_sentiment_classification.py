@@ -84,7 +84,7 @@ else:
     print("GPU is NOT available, continuing with CPU")
 
 # Load in the dataframe with the indicators and the embeddings
-FE = "data (new implementation)/sentiment_exploration (1).parquet"
+FE = "data/sentiment_exploration (1).parquet"
 OD = Path.cwd()
 DF_path = OD / FE
 DF = pd.read_parquet(DF_path)
