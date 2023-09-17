@@ -4,69 +4,88 @@ from pathlib import Path
 from statsmodels.regression.rolling import RollingOLS
 from statsmodels.tools.tools import add_constant
 from tqdm import tqdm
-from copy import deepcopy
 
 # Load in the dataframe with OHLC data as well as Fama-French 5-Factor data
-operating_directory = Path.cwd()
-ff_file_extension = "data/F-F_Research_Data_5_Factors_2x3_daily.CSV"
-ohlc_file_extension = "data/ohlc.parquet"
+ff_file_path = "sp500-prediction/data/F-F_Research_Data_5_Factors_2x3_daily.CSV"
+ohlc_file_path = "data/ohlc.parquet"
 
-ff_df = pd.read_csv(operating_directory / ff_file_extension)
-
-ohlc_df = pd.read_parquet(operating_directory / ohlc_file_extension)
+ff_dtypes = {
+    "Mkt-RF": pd.Float64Dtype(),
+    "SMB": pd.Float64Dtype(),
+    "HML": pd.Float64Dtype(),
+    "RMW": pd.Float64Dtype(),
+    "CMA": pd.Float64Dtype(),
+    "RF": pd.Float64Dtype(),
+}
+ff = pd.read_csv(ff_file_path, index_col=0, dtype=ff_dtypes)
+ohlc = pd.read_parquet(ohlc_file_path)
 
 # Format Fama-French DataFrame
-ff_df[ff_df.columns[0]] = pd.to_datetime(ff_df[ff_df.columns[0]], format='%Y%m%d')
-ff_df.set_index(ff_df.columns[0], inplace=True, drop=True)
+ff.index = pd.to_datetime(ff.index, format="%Y%m%d")
+ff.index.name = "date"
+# Convert to decimal format
+factor_cols = ff.columns.drop("RF")
+ff[factor_cols] = ff[factor_cols] / 100
 
 # Join the FF data and OHLC data
-multi_index_names = ohlc_df.index.names
-combined_df = ohlc_df.join(ff_df, on=[multi_index_names[1]])
+ohlc = ohlc.join(ff, on="date", how="inner")
 
 # Perform rolling OLS with the FF 5-Factor Model data
-ticker_list = ohlc_df.index.get_level_values(multi_index_names[0]).unique()
+symbol = ohlc.index.get_level_values("symbol").unique()
 rolling_window_length = 50
 
-# Create DataFrame to store 5-Factor coefficients
-factors = ['idosynchratic']
-factors.extend(ff_df.columns[:-1])
-column_names = ['beta_' + factors[i] for i in range(len(factors))]
-counter = 1
+# sort by date so rolling windows
+# and return calcs work properly
+ohlc.sort_index(inplace=True)
+stocks = ohlc.groupby("symbol")
+ohlc["returns"] = stocks["adjusted_close"].pct_change()
+ohlc["log_returns"] = np.log(ohlc["adjusted_close"] / stocks["adjusted_close"].shift(1))
+ohlc["excess_returns"] = ohlc["returns"] - ohlc["RF"]
+ohlc["excess_log_returns"] = ohlc["log_returns"] - ohlc["RF"]
+# remove rows with missing values from returns calculations
+ohlc.dropna(inplace=True)
 
-progress_bar = tqdm(ticker_list, desc="Calculating coeffs for stocks")
-for ticker in progress_bar:
+column_names = ["beta_" + factor for factor in factor_cols]
+column_names = ["beta_idosynchratic"] + column_names
+beta_dfs = {}
+progress_bar = tqdm(symbol, desc="Calculating coeffs for stocks")
 
+for symbol in progress_bar:
     # Show current symbol in progress bar
-    progress_bar.set_postfix_str(ticker.ljust(5, " "))
+    progress_bar.set_postfix_str(symbol.ljust(5, " "))
 
-    stock_specific_df = deepcopy(combined_df[combined_df.index.get_level_values(multi_index_names[0]) == ticker])
+    # Get the data for the current stock
+    this_stock = ohlc.loc[symbol].copy()
 
-    stock_specific_df['excess_simple_returns'] = (stock_specific_df['adjusted_close'] \
-                                          / stock_specific_df['adjusted_close'].shift(1) - 1.0) \
-                                          - stock_specific_df['RF']
-
-    stock_specific_df.dropna(inplace=True)
+    # Skip if there is not enough data
+    if len(this_stock) < rolling_window_length:
+        continue
 
     # Form independent and dependent variable matrices
-    X = add_constant(stock_specific_df[factors[1:]]/100).to_numpy()
-    y = np.expand_dims(stock_specific_df['excess_simple_returns'].to_numpy(), axis=1)
+    X = this_stock[factor_cols].astype(float)
+    X = add_constant(X)
 
-    # Fit the linear model and save the coefficients if the stock has enough data
-    if (X.shape[0] > rolling_window_length) and (y.shape[0] > rolling_window_length):
+    y = this_stock["excess_returns"].astype(float)
 
-        results = RollingOLS(endog=y, exog=X, window=rolling_window_length, min_nobs=10, expanding=True).fit()
+    rolling_ols = RollingOLS(
+        endog=y, exog=X, window=rolling_window_length, min_nobs=10, expanding=True
+    ).fit()
 
-        coefficients_df = pd.DataFrame(results.params, index=stock_specific_df.index,
-                                       columns=column_names).dropna()
+    coefficients = rolling_ols.params
+    coefficients.columns = column_names
 
-        coefficients_df['idosynchratic_change'] = coefficients_df['beta_idosynchratic'].pct_change(-1)
-        coefficients_df.dropna(inplace=True)
+    # Drop the first rolling_window_length rows since they are all NaNs
+    coefficients.dropna(inplace=True)
 
-        if counter == 1:
-            beta_df = deepcopy(coefficients_df)
-            counter += 1
-        else:
-            beta_df = pd.concat([beta_df, coefficients_df])
+    coefficients["idosynchratic_change"] = coefficients[
+        "beta_idosynchratic"
+    ].pct_change(-1)
+    coefficients.dropna(inplace=True)
+
+    # Save the coefficients for this stock
+    beta_dfs[symbol] = coefficients
+
+beta_df = pd.concat(beta_dfs, axis=0)
 
 # Save the table
 beta_save_path = Path("data/beta.parquet")

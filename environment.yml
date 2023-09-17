@@ -9,6 +9,7 @@ dependencies:
   - pandas
   - matplotlib
   - ipykernel
+  - statsmodels
 
   # Parallel Computing
   - dask
