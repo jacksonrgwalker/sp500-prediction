@@ -7,43 +7,14 @@ from pathlib import Path
 
 # Machine Learning
 import tensorflow as tf
-import keras
-import keras.optimizers
+from keras.models import load_model
 from keras import Sequential
-from keras.layers import Dense, Dropout, Input
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from keras.layers import Dense, Dropout
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
 # Built-ins
-from copy import deepcopy as dc
 from random import choice
-
-# Create a neural net function to train the hyperparameters
-def build_model(hp):
-    model = keras.Sequential()
-    model.add(Dense(shape=(SX_train.shape[1],)))  # Specify the input size here
-
-    # Tune the number of neurons per layer
-    for i in range(hp.Int('layers', min_value=1, max_value=3)):
-
-        # Add dropout layer and tune the dropout rate
-        model.add(Dense(units=hp.Int(f'units_{i+1}', min_value=32, max_value=512, step=32),
-                        activation=hp.Choice(f'activation_{i+1}', ['relu', 'tanh'])))
-        model.add(Dropout(rate=hp.Float(f'dropout_{i+1}',
-                                        min_value=0.0, max_value=0.5, step=0.1)))
-
-    # Output layer with a single neuron and sigmoid activation for binary classification
-    model.add(Dense(1, activation='linear'))
-
-    # Tune the batch size
-    batch_size = hp.Int('batch_size', min_value=16, max_value=128, step=16)
-
-    # Compile the model
-    model.compile(optimizer=hp.Choice('Optimizer', values=['SGD', 'adam']),
-        loss='mean_squared_error',
-        metrics=['mean_squared_error'])
-
-    return model
 
 class NeuralNetwork():
     def __init__(self):
@@ -51,13 +22,14 @@ class NeuralNetwork():
 
     def build(self, layers, npl, LA, drop_percent, input_shape):
 
-        # Add input layer
-        self.model.add(Dense(units=input_shape, input_shape=(input_shape,), activation = 'relu'))
-
         # Add a certian number of layers
-        for i in range(1, layers):
-            self.model.add(Dense(npl[i-1], activation=LA[i-1]))
-            self.model.add(Dropout(rate=drop_percent[i-1]))
+        for i in range(layers):
+            if i == 0:
+                self.model.add(Dense(npl[i], activation=LA[i], input_dim=input_shape))
+            else:
+                self.model.add(Dense(npl[i], activation=LA[i]))
+
+            self.model.add(Dropout(rate=drop_percent[i]))
 
         # Output layer for the binary classification task
         self.model.add(Dense(1, activation='sigmoid'))
@@ -77,21 +49,24 @@ class NeuralNetwork():
         return self.model.predict(x)
 
 # Check if GPU is available for GPU
-# if tf.test.gpu_device_name():
-#     print("GPU is available, but turning it off for this network")
-#     tf.config.set_visible_devices([], 'GPU')
-# else:
-#     print("GPU is NOT available, continuing with CPU")
+if tf.test.gpu_device_name():
+    print("GPU is available, but turning it off for this network")
+    tf.config.set_visible_devices([], 'GPU')
+else:
+    print("GPU is NOT available, continuing with CPU")
 
 # Load in the dataframe with OHLC data as well as Fama-French 5-Factor data
 operating_directory = Path.cwd()
 embedding_file_extension = "data/sentiment_exploration (1).parquet"
 beta_file_extension = "data/beta.parquet"
 
+# Aggregate news to a single embedding per day, per ticker, by averaging embeddings if
+# the same ticker has multiple articles for a single day
 embedding_df = pd.read_parquet(operating_directory / embedding_file_extension)
 column_names = embedding_df.columns
 embedding_df = embedding_df.drop(column_names[0], axis=1).groupby([column_names[1],
                                 column_names[2]]).mean().dropna()
+
 
 beta_df = pd.read_parquet(operating_directory / beta_file_extension)
 
@@ -99,104 +74,126 @@ beta_df = pd.read_parquet(operating_directory / beta_file_extension)
 multi_index_names = embedding_df.index.names
 combined_df = embedding_df.join(beta_df, on=multi_index_names)
 combined_df.dropna(inplace=True)
-
-# Aggregate news to a single embedding per day, per ticker, by averaging embeddings if
-# the same ticker has multiple articles for a single day
 combined_column_names = combined_df.columns
 
 # Split the data into dependent and independent variable sets
 X = combined_df.loc[:, combined_column_names[15:]].to_numpy()
 
 # Try the next day returns as the only dependent variable
-dependent_df = combined_df['idosynchratic_change']
+dependent_df = combined_df['idosyncratic_change']
 
-# Apply the custom function to create the new column
+# Classify articles that came out after positive day returns as "1", else "0"
 YC = np.where(dependent_df < 0, 0, 1)
-# YC = dc(Y).to_numpy()
-
-# Split the data into train and test
-X_train, X_test, y_train, y_test = train_test_split(X, YC, test_size=0.20)
 
 # Scale the data with a standard scaler
-scaler1 = MinMaxScaler(feature_range=(-1,1))
-scaler2 = StandardScaler()
+scaler1 = StandardScaler()
 
-# Tensors for tensorflow
-SX_train = scaler2.fit_transform(X_train).astype(np.float32)
-SX_test = scaler2.fit_transform(X_test).astype(np.float32)
+train = 0
 
-# Define a list of hyperparameters to test
-HP = {
-    'Optimizer': ['SGD', 'Adam'],#, 'RMSprop', 'Nadam', 'Adagrad', 'Adadelta'],
-    'HLs': [1],
-    'NPL': [int(i*32) for i in range(1,31)],
-    'DR': [0.0, 0.10, 0.20],
-    'batch_size': [int(i*10) for i in range(1,11)],
-    'AF': ['relu', 'tanh', 'sigmoid']
-}
+if train == 0:
 
-# Try 1000 different combinations of the hyperparameters and see if we can get something that fits well
-combs = 500
-cc = 1
-SCs = []
-epochs = 25
-MVA = 0
+    # Load in the model
+    best_model = load_model("data/best_model.h5")
 
-accuracy_ = tf.keras.metrics.BinaryAccuracy(
-    name='binary_accuracy', dtype=None, threshold=0.5
-)
+else:
 
-# Define the EarlyStopping callback
-early_stopping = tf.keras.callbacks.EarlyStopping(
-    monitor='val_'+accuracy_.name,
-    patience=5,
-    restore_best_weights=False
-)
+    # Split the data into train and test
+    test_fraction = 0.20
+    X_train, X_test, y_train, y_test = train_test_split(X, YC, test_size=test_fraction)
 
-for i in range(combs):
+    # Tensors for tensorflow
+    scaled_X_train = scaler1.fit_transform(X_train).astype(np.float32)
+    scaled_X_test = scaler1.fit_transform(X_test).astype(np.float32)
 
-    # Choose the hyperparameters randomly and append the list to a dictionary
-    CPs = {}
-    CPs['CO'] = choice(HP['Optimizer']) # Optimizer
-    CPs['CBS'] = choice(HP['batch_size']) # Batch size
-    CPs['CLs'] = choice(HP['HLs'])  # Layers
-    CPs['CNPLs'] = [choice(HP['NPL']) for i in range(CPs['CLs']-1)]   # Nodes per layer
-    CPs['CDRs'] = [choice(HP['DR']) for i in range(CPs['CLs']-1)]     # Dropout per layer
-    CPs['CAs'] = [choice(HP['AF']) for i in range(CPs['CLs']-1)]      # Activation function per layer
+    # Define a list of hyperparameters to test
+    dummy = []
+    feature_size = scaled_X_train.shape[1]
+    HP = {}
+    HP['Optimizer'] = ['SGD', 'Adam']
+    HP['HLs'] = [1, 2]
+    HP['NPL'] = [[int(feature_size*2/3) - 64*i for i in range(10)],
+                 [32*i for i in range(1, 11)]]
+    HP['DR'] = [0.0, 0.10, 0.20]
+    HP['batch_size'] = [50, 100, 150]
+    HP['AF'] = ['relu', 'tanh']
 
-    attempts = 0
-    while CPs in SCs and attempts < 10:
-        CPs['CLs'] = choice(HP['HLs'])
-        CPs['CNPLs'] = [choice(HP['NPL']) for i in range(CPs['CLs']-1)]
-        CPs['CDRs'] = [choice(HP['DR']) for i in range(CPs['CLs']-1)]
-        CPs['CAs'] = [choice(HP['AF']) for i in range(CPs['CLs']-1)]
-        attempts += 1
+    # Try 50 different combinations of the hyperparameters and see if we can get something that fits well
+    combs = 3
+    cc = 1
+    SCs = []
+    epochs = 50
+    MVA = 0
 
-    # Couldn't find a new combination to try
-    if attempts == 10:
-        break
+    # Define the EarlyStopping callback
+    early_stopping = tf.keras.callbacks.EarlyStopping(
+        monitor='val_accuracy',
+        patience=10,
+        restore_best_weights=False
+    )
 
-    # Print out the combination and the iteration we're on then store the current combination
-    print(f'The best validation accuracy thus far is {MVA}')
-    print('')
-    print(f'Trying combination {i}: {CPs}')
-    print('')
-    SCs.append(CPs)
+    for i in range(combs):
 
-    model = NeuralNetwork()
-    model.build(CPs['CLs'], CPs['CNPLs'], CPs['CAs'], CPs['CDRs'], SX_train.shape[1])
-    model.compile(CPs['CO'], loss='binary_crossentropy', metrics=[accuracy_])
-    hist = model.train(x_train=SX_train, y_train=y_train, epochs=epochs, batch_size=CPs['CBS'],
-                       validation_data=(SX_test, y_test), CBs=[early_stopping])
+        # Choose the hyperparameters randomly and append the list to a dictionary
+        CPs = {}
+        CPs['CO'] = choice(HP['Optimizer']) # Optimizer
+        CPs['CBS'] = choice(HP['batch_size']) # Batch size
+        CPs['CLs'] = choice(HP['HLs'])  # Layers
+        CPs['CNPLs'] = [choice(HP['NPL'][i]) for i in range(CPs['CLs'])]   # Nodes per layer
+        CPs['CDRs'] = [choice(HP['DR']) for i in range(CPs['CLs'])]     # Dropout per layer
+        CPs['CAs'] = [choice(HP['AF']) for i in range(CPs['CLs'])]      # Activation function per layer
 
-    if np.max(hist.history['val_'+accuracy_.name]) > MVA:
-        Best_params = CPs
-        MVA = np.max(hist.history['val_'+accuracy_.name])
+        attempts = 0
+        while CPs in SCs and attempts < 10:
+            CPs['CLs'] = choice(HP['HLs'])
+            CPs['CNPLs'] = [choice(HP['NPL'][i]) for i in range(CPs['CLs'])]
+            CPs['CDRs'] = [choice(HP['DR']) for i in range(CPs['CLs'])]
+            CPs['CAs'] = [choice(HP['AF']) for i in range(CPs['CLs'])]
+            attempts += 1
 
-    print('=====================================================================')
-    print('')
+        # Couldn't find a new combination to try
+        if attempts == 10:
+            break
 
-best_model = NeuralNetwork()
-best_model.build(Best_params['CLs'], Best_params['CNPLs'], Best_params['CAs'], Best_params['CDRs'], SX_train.shape[1])
-best_model.compile(CPs['CO'], loss='binary_crossentropy', metrics=['accuracy'])
-best_model.save('Best_model.H5')
+        # Print out the combination and the iteration we're on then store the current combination
+        print(f'The best validation accuracy thus far is {MVA}')
+        print('')
+        print(f'Trying combination {i}: {CPs}')
+        print('')
+        SCs.append(CPs)
+
+        model = NeuralNetwork()
+        model.build(CPs['CLs'], CPs['CNPLs'], CPs['CAs'], CPs['CDRs'], scaled_X_train.shape[1])
+        model.compile(CPs['CO'], loss='binary_crossentropy')
+        hist = model.train(x_train=scaled_X_train, y_train=y_train, epochs=epochs, batch_size=CPs['CBS'],
+                           validation_data=(scaled_X_test, y_test), CBs=[early_stopping])
+
+        if np.max(hist.history['val_accuracy']) > MVA:
+            Best_params = CPs
+            MVA = np.max(hist.history['val_accuracy'])
+
+            if MVA > 0.61:
+                break
+
+        print('=====================================================================')
+        print('')
+
+
+    best_model = NeuralNetwork()
+    best_model.build(Best_params['CLs'], Best_params['CNPLs'], Best_params['CAs'], Best_params['CDRs'],
+                     scaled_X_train.shape[1])
+    best_model.compile(Best_params['CO'], loss='binary_crossentropy')
+    hist = best_model.train(x_train=scaled_X_train, y_train=y_train, epochs=epochs, batch_size=CPs['CBS'],
+                       validation_data=(scaled_X_test, y_test))
+
+    best_model.model.save('data/best_model')
+
+# With the best model determined, predict the labels for the dataset
+scaled_X = scaler1.fit_transform(X).astype(np.float32)
+labels = best_model.predict(scaled_X)
+
+# Create a DataFrame to store the sentiment
+sentiment_df = pd.DataFrame(labels, columns=['sentiment_score'], index=combined_df.index)
+
+# Save the table
+sentiment_save_path = Path("data/sentiment.parquet")
+sentiment_df.to_parquet(sentiment_save_path)

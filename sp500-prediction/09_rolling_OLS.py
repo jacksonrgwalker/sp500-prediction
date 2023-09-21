@@ -6,7 +6,7 @@ from statsmodels.tools.tools import add_constant
 from tqdm import tqdm
 
 # Load in the dataframe with OHLC data as well as Fama-French 5-Factor data
-ff_file_path = "sp500-prediction/data/F-F_Research_Data_5_Factors_2x3_daily.CSV"
+ff_file_path = "data/F-F_Research_Data_5_Factors_2x3_daily.CSV"
 ohlc_file_path = "data/ohlc.parquet"
 
 ff_dtypes = {
@@ -41,12 +41,12 @@ stocks = ohlc.groupby("symbol")
 ohlc["returns"] = stocks["adjusted_close"].pct_change()
 ohlc["log_returns"] = np.log(ohlc["adjusted_close"] / stocks["adjusted_close"].shift(1))
 ohlc["excess_returns"] = ohlc["returns"] - ohlc["RF"]
-ohlc["excess_log_returns"] = ohlc["log_returns"] - ohlc["RF"]
+ohlc["excess_log_returns"] = ohlc["log_returns"] - np.log(ohlc["RF"])
 # remove rows with missing values from returns calculations
 ohlc.dropna(inplace=True)
 
 column_names = ["beta_" + factor for factor in factor_cols]
-column_names = ["beta_idosynchratic"] + column_names
+column_names = ["beta_idosyncratic"] + column_names
 beta_dfs = {}
 progress_bar = tqdm(symbol, desc="Calculating coeffs for stocks")
 
@@ -77,8 +77,8 @@ for symbol in progress_bar:
     # Drop the first rolling_window_length rows since they are all NaNs
     coefficients.dropna(inplace=True)
 
-    coefficients["idosynchratic_change"] = coefficients[
-        "beta_idosynchratic"
+    coefficients["idosyncratic_change"] = coefficients[
+        "beta_idosyncratic"
     ].pct_change(-1)
     coefficients.dropna(inplace=True)
 
