@@ -2,9 +2,12 @@ import debug_config
 
 import os
 from pathlib import Path
-project_dir = Path.cwd().parent
-os.chdir(project_dir)
-#os.chdir('change to the mother working directory')
+
+BASE_DIR = Path.cwd().parent
+DATA_DIR = BASE_DIR / "data"
+OUTPUT_DIR = BASE_DIR / "saved_output"
+FIGURE_DIR = BASE_DIR / 'figures'
+
 ###############################################################################
 from sklearn.linear_model import LinearRegression
 from tqdm import tqdm
@@ -15,7 +18,7 @@ import pandas as pd
 if debug_config.DEBUG_MODE and debug_config.IGNORE_SENTIMENT:
     _sp_dat_ = pd.read_csv("2-cleaned_data\\dat_sp500_index_no_sentiment.csv",index_col = 0)
 else:
-    _sp_dat_ = pd.read_csv("2-cleaned_data\\dat_sp500_index.csv",index_col = 0)
+    _sp_dat_ = pd.read_parquet(DATA_DIR / "dat_sp500_index.parquet")
 _sp_dat_['date'] = pd.to_datetime(_sp_dat_['date'])
 _sp_dat_ = _sp_dat_[['date','return_t_plus_1']].copy()
 
@@ -24,14 +27,14 @@ _sp_dat_ = _sp_dat_[['date','return_t_plus_1']].copy()
 if debug_config.DEBUG_MODE and debug_config.IGNORE_SENTIMENT:
     _output = pd.read_csv("2-cleaned_data\\dat_518_companies_no_sentiment.csv",index_col = 0)
 else:
-    _output = pd.read_csv("2-cleaned_data\\dat_518_companies.csv",index_col = 0)
+    _output = pd.read_parquet(DATA_DIR / "dat_518_companies.parquet")
 _output = _output[['date','ticker']].copy()
 
-_LR_output = pd.read_csv("saved_output\\LR.csv",index_col = 0) 
-_RF_output = pd.read_csv("saved_output\\RF_pred.csv",index_col = 0) 
-_Dense_output = pd.read_csv("saved_output\\Dense_monthly_update_10_year.csv",index_col = 0) 
-_LSTM_two_layer = pd.read_csv("saved_output\\LSTM_pred_two_layer_mae_linear_activation_length_4.csv",index_col = 0) 
-_LSTM_stock_output = pd.read_csv("saved_output\\LSTM_pred_one_layer_mae_linear_activation_length_3_stock.csv",index_col = 0) 
+_LR_output = pd.read_parquet(OUTPUT_DIR / "LR_pred.parquet")
+_RF_output = pd.read_parquet(OUTPUT_DIR / "RF_pred.parquet")
+_Dense_output = pd.read_parquet(OUTPUT_DIR / "Dense_monthly_update_10_year.parquet")
+_LSTM_two_layer = pd.read_parquet(OUTPUT_DIR / "LSTM_pred_two_layer_mae_linear_activation_length_4.parquet")
+_LSTM_stock_output = pd.read_parquet(OUTPUT_DIR / "LSTM_pred_one_layer_mae_linear_activation_length_3_stock.parquet")
 ###############################################################################
 
 _output = pd.merge(_output,_LR_output,how = "left",on=['date','ticker'])

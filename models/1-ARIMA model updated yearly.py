@@ -7,12 +7,14 @@ from pmdarima.arima import ndiffs
 import numpy as np
 from tqdm import tqdm
 
-def load_data_and_configs(data_path, json_path):
-    with open(json_path, 'r') as f:
-        ticker_sector = json.load(f)
+BASE_DIR = Path.cwd().parent
+DATA_DIR = BASE_DIR / "data"
+OUTPUT_DIR = BASE_DIR / "saved_output"
+
+def load_data_and_configs(data_path):
     data = pd.read_csv(data_path, index_col=0)
     data['date'] = pd.to_datetime(data['date'])
-    return data, ticker_sector
+    return data
 
 def fit_and_predict_arima(train_data, test_data):
     try:
@@ -36,10 +38,8 @@ def fit_and_predict_arima(train_data, test_data):
     return np.asarray(_pred_y)
 
 
-project_dir = Path.cwd().parent
-data_path = project_dir / "2-cleaned_data" / "dat_518_companies.csv"
-json_path = project_dir / "2-cleaned_data" / "ticker_sector_information.json"
-_dat_, ticker_sector = load_data_and_configs(data_path, json_path)
+data_path = DATA_DIR / "dat_518_companies.parquet"
+_dat_ = load_data_and_configs(data_path)
 
 available_years = [item for item in range(2003,2020)]
 _output = pd.DataFrame()
@@ -48,7 +48,7 @@ for _year in tqdm(available_years):
     train_df = _dat_[_dat_['date'].dt.year < _year].copy()
     test_df = _dat_[_dat_['date'].dt.year == _year].copy()
 
-    for ticker in tqdm(ticker_sector, leave=False):
+    for ticker in tqdm(_dat_.ticker.unique(), leave=False):
         temp = train_df[train_df['ticker'] == ticker]
         temp_test = test_df[test_df['ticker'] == ticker]
 
@@ -76,4 +76,4 @@ print('DDA:', sum( np.logical_and((_output_2['ARIMA_pred'] < 0),(_output_2['retu
 
 _output = _output[['date','ticker','ARIMA_pred']].copy()
 _output['date'] = _output['date'].astype(str)
-_output.to_csv(project_dir / "saved_output" / "ARIMA.csv")
+_output.to_parquet(OUTPUT_DIR / "ARIMA.parquet")

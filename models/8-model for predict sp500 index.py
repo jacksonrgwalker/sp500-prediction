@@ -2,9 +2,11 @@ import debug_config
 
 import  os
 from pathlib import Path
-project_dir = Path.cwd().parent
-os.chdir(project_dir)
-#os.chdir('change to the mother working directory')
+
+BASE_DIR = Path.cwd().parent
+DATA_DIR = BASE_DIR / "data"
+OUTPUT_DIR = BASE_DIR / "saved_output"
+FIGURE_DIR = BASE_DIR / 'figures'
 ###############################################################################
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
@@ -19,8 +21,7 @@ import pandas as pd
 if debug_config.DEBUG_MODE and debug_config.IGNORE_SENTIMENT:
     _dat_ = pd.read_csv("2-cleaned_data\\dat_sp500_index_no_sentiment.csv",index_col = 0)
 else:
-    _dat_ = pd.read_csv("2-cleaned_data\\dat_sp500_index.csv",index_col = 0)
-ticker_sector = json.loads(open('2-cleaned_data\\ticker_sector_information.json').read())
+    _dat_ = pd.read_parquet(DATA_DIR / "dat_518_companies.parquet")
 ###############################################################################
 
 available_years = [item for item in range(2003,2020)]

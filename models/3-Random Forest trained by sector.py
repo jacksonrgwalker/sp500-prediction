@@ -2,9 +2,13 @@ import debug_config
 ################################
 import  os
 from pathlib import Path
-project_dir = Path.cwd().parent
-os.chdir(project_dir)
+# project_dir = Path.cwd().parent
+# os.chdir(project_dir)
 #os.chdir('change to the mother working directory')
+BASE_DIR = Path.cwd().parent
+DATA_DIR = BASE_DIR / "data"
+OUTPUT_DIR = BASE_DIR / "saved_output"
+
 ###############################################################################
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import PowerTransformer
@@ -14,21 +18,17 @@ import pandas as pd
 import json
 #import _pickle as cPickle
 ###############################################################################
-ticker_sector = json.loads(open('2-cleaned_data\\ticker_sector_information.json').read())
-_sector = []
-for ticker in ticker_sector:
-    _sector.append(ticker_sector[ticker]['sector'])
-_sector = list(set(_sector))
+# ticker_sector = json.loads(open('2-cleaned_data\\ticker_sector_information.json').read())
+# _sector = []
+# for ticker in ticker_sector:
+#     _sector.append(ticker_sector[ticker]['sector'])
+# _sector = list(set(_sector))
 
-_industry = []
-for ticker in ticker_sector:
-    _industry.append(ticker_sector[ticker]['industry'])
-_industry = list(set(_industry))
 ###############################################################################
 if debug_config.DEBUG_MODE and debug_config.IGNORE_SENTIMENT:
-    _dat_ = pd.read_csv("2-cleaned_data\\dat_518_companies_no_sentiment.csv",index_col = 0)
+    _dat_ = pd.read_csv("2-cleaned_data\\dat_518_companies_no_sentiment.csv",index_col = 0) # TODO
 else:
-    _dat_ = pd.read_csv("2-cleaned_data\\dat_518_companies.csv",index_col = 0)
+    _dat_ = pd.read_parquet(DATA_DIR / "dat_518_companies.parquet")
 ###############################################################################
 original_val =  ['return_t','sentiment','PeRatio', 'PsRatio', 'PbRatio','cci','macd','rsi_14','kdjk' ,'wr_14','atr_percent','cmf']
 output_val = ['return_t_plus_1']
@@ -36,6 +36,7 @@ output_val = ['return_t_plus_1']
 
 available_years = [item for item in range(2002,2020)]
 
+_sector = _dat_.sector_y.unique()
 _output = pd.DataFrame()
 for year in tqdm(available_years):   
     _result = []
@@ -89,5 +90,5 @@ print(sum( np.logical_and((_output_2['RF_pred'] >= 0),(_output_2['return_t_plus_
 print('DDA')
 print(sum( np.logical_and((_output_2['RF_pred'] < 0),(_output_2['return_t_plus_1'] < 0)) ) / sum(_output_2['return_t_plus_1'] < 0))
 
-# _output = _output[['date','ticker','RF_pred']].copy()
-# _output.to_csv("saved_output\\RF_pred.csv")
+_output = _output[['date','ticker','RF_pred']].copy()
+_output.to_parquet(OUTPUT_DIR / "RF_pred.parquet")

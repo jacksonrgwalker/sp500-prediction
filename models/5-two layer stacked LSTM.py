@@ -3,9 +3,10 @@ import debug_config
 ################################
 import  os
 from pathlib import Path
-project_dir = Path.cwd().parent
-os.chdir(project_dir)
-#os.chdir('change to the mother working directory')
+
+BASE_DIR = Path.cwd().parent
+DATA_DIR = BASE_DIR / "data"
+OUTPUT_DIR = BASE_DIR / "saved_output"
 
 ###############################################################################
 from sklearn.preprocessing import PowerTransformer
@@ -18,10 +19,10 @@ import pandas as pd
 import json
 ###############################################################################
 if debug_config.DEBUG_MODE and debug_config.IGNORE_SENTIMENT:
-    _dat_ = pd.read_csv("2-cleaned_data\\dat_518_companies_no_sentiment.csv",index_col = 0)
+    _dat_ = pd.read_csv("2-cleaned_data\\dat_518_companies_no_sentiment.csv",index_col = 0) # TODO
 else:
-    _dat_ = pd.read_csv("2-cleaned_data\\dat_518_companies.csv",index_col = 0)
-ticker_sector = json.loads(open('2-cleaned_data\\ticker_sector_information.json').read())
+    _dat_ = pd.read_parquet(DATA_DIR / "dat_518_companies.parquet")
+_tickers = _dat_.ticker.unique()
 ###############################################################################
 original_val =  ['return_t','sentiment','PeRatio','PsRatio','PbRatio','cci','macdh','rsi_14','kdjk' ,'wr_14','atr_percent','cmf']
 output_val = ['return_t_plus_1']
@@ -77,7 +78,7 @@ for _year in tqdm(available_years):
     
     ###########################################################################
     dat = []
-    for ticker in tqdm(ticker_sector,leave=False, disable = True):
+    for ticker in tqdm(_tickers,leave=False, disable = True):
         temp = train_df[train_df['ticker'] == ticker].copy()    
         temp['date'] = pd.to_datetime(temp['date'])   
         if len(temp) > input_width:
@@ -109,7 +110,7 @@ for _year in tqdm(available_years):
     
     _result= []
     _result_accuracy = []
-    for ticker in tqdm(ticker_sector,leave=False, disable = True):
+    for ticker in tqdm(_tickers,leave=False, disable = True):
         temp = _dat_[_dat_['ticker'] == ticker].copy()
         temp_current = temp[pd.DatetimeIndex(temp['date']).year == (_year-1) ].copy()    
         temp_current['date'] = pd.to_datetime(temp_current['date'])
@@ -160,7 +161,8 @@ print('DDA')
 print(sum( np.logical_and((_output_2['LSTM_pred'] < 0),(_output_2['return_t_plus_1'] < 0)) ) / sum(_output_2['return_t_plus_1'] < 0))
 
 _output = _output[['date','ticker','LSTM_pred']].copy()
-_output.to_csv("saved_output\\LSTM_pred_two_layer_mae_linear_activation_length_4.csv")
+_output.to_parquet(OUTPUT_DIR / "LSTM_pred_two_layer_mae_linear_activation_length_4.parquet")
+
 
 
 

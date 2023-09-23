@@ -1,9 +1,10 @@
 import  os
 from pathlib import Path
-project_dir = Path.cwd().parent
-os.chdir(project_dir)
-#os.chdir('change to the mother working directory')
-# os.chdir('C:\\Users\\zhong\\Dropbox\\github\\stock_project_for_sbumission')
+
+BASE_DIR = Path.cwd().parent
+DATA_DIR = BASE_DIR / "data"
+OUTPUT_DIR = BASE_DIR / "saved_output"
+FIGURE_DIR = BASE_DIR / 'figures'
 ###############################################################################
 from sklearn.linear_model import LinearRegression
 
@@ -16,17 +17,17 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 
 ###############################################################################
-_output = pd.read_csv("2-cleaned_data\\dat_518_companies.csv",index_col = 0)
-ticker_sector = json.loads(open('2-cleaned_data\\ticker_sector_information.json').read())
+_output = pd.read_parquet(DATA_DIR / "dat_518_companies.parquet")
+_tickers = _output.ticker.unique()
 ###############################################################################
 
 _output = _output[['date','ticker','return_t_plus_1']].copy()
-_ARIMA_output = pd.read_csv("saved_output\\ARIMA.csv",index_col = 0) 
-_LR_output = pd.read_csv("saved_output\\LR.csv",index_col = 0) 
-_RF_output = pd.read_csv("saved_output\\RF_pred.csv",index_col = 0) 
-_Dense_output = pd.read_csv("saved_output\\Dense_monthly_update_10_year.csv",index_col = 0) 
-_LSTM_two_layer = pd.read_csv("saved_output\\LSTM_pred_two_layer_mae_linear_activation_length_4.csv",index_col = 0) 
-_LSTM_stock_output = pd.read_csv("saved_output\\LSTM_pred_one_layer_mae_linear_activation_length_3_stock.csv",index_col = 0) 
+_ARIMA_output = pd.read_parquet(OUTPUT_DIR / "ARIMA.parquet")
+_LR_output = pd.read_parquet(OUTPUT_DIR / "LR_pred.parquet")
+_RF_output = pd.read_parquet(OUTPUT_DIR / "RF_pred.parquet")
+_Dense_output = pd.read_parquet(OUTPUT_DIR / "Dense_monthly_update_10_year.parquet")
+_LSTM_two_layer = pd.read_parquet(OUTPUT_DIR / "LSTM_pred_two_layer_mae_linear_activation_length_4.parquet")
+_LSTM_stock_output = pd.read_parquet(OUTPUT_DIR / "LSTM_pred_one_layer_mae_linear_activation_length_3_stock.parquet")
 ###############################################################################
 
 _output = pd.merge(_output,_ARIMA_output,how = "left",on=['date','ticker'])
@@ -111,7 +112,7 @@ ax.plot(available_years,FFNN,label="FFNN")
 ax.plot(available_years,LSTM,label="LSTM")
 ax.legend()
 ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-fig.savefig('model comparison.png', dpi=400,bbox_inches='tight') 
+fig.savefig(FIGURE_DIR / 'model comparison.png', dpi=400,bbox_inches='tight') 
 
 ###############################################################################
 '''yearly DA for ensemble model and the best individual model'''
@@ -130,7 +131,7 @@ for _year in tqdm(available_years):
 
 ###############################################################################
 '''plot for the ensemble model'''
-for ticker in tqdm(ticker_sector):
+for ticker in tqdm(_tickers):
     temp = _output_2[_output_2['ticker']==ticker].copy()
     temp['date'] = pd.to_datetime(temp['date'])
     temp = temp.sort_values('date')    
@@ -146,14 +147,14 @@ plt.plot(available_years,ensemble,color="red",label="Ensemble model")
 plt.plot(available_years,best_individual,color="blue",label="Best individual model")
 plt.legend()
 plt.ylim([0.425,0.775])
-plt.savefig('ensemble_model_performance.png', dpi=400,bbox_inches='tight') 
+plt.savefig(FIGURE_DIR / 'ensemble_model_performance.png', dpi=400,bbox_inches='tight') 
 
 ###############################################################################
 '''plot for where the ensemble model predicted a over 5 percent return'''
 output_3 = _output_2[_output_2['ensemble'] >= 0.05].copy()
 
 count = 0
-for ticker in ticker_sector:
+for ticker in _tickers:
     output_4 = output_3[output_3['ticker']==ticker].copy()
     if len(output_4)>0:
         plt.scatter(pd.DatetimeIndex(output_4['date']),output_4['return_t_plus_1'],s= 0.2,alpha=0.8)
@@ -161,7 +162,7 @@ for ticker in ticker_sector:
 plt.ylim([-0.5,0.5])
 plt.axhline(np.mean(output_3['return_t_plus_1']), color='r', linestyle='-.', linewidth= 0.5)
 plt.ylabel("Log Return")
-plt.savefig('ensemble_model_five_percent.png', dpi=400,bbox_inches='tight') 
+plt.savefig(FIGURE_DIR / 'ensemble_model_five_percent.png', dpi=400,bbox_inches='tight') 
 
 
 

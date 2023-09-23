@@ -1,9 +1,10 @@
 import debug_config 
 import  os
 from pathlib import Path
-project_dir = Path.cwd().parent
-os.chdir(project_dir)
-#os.chdir('change to the mother working directory')
+
+BASE_DIR = Path.cwd().parent
+DATA_DIR = BASE_DIR / "data"
+OUTPUT_DIR = BASE_DIR / "saved_output"
 
 ###############################################################################
 from sklearn.preprocessing import PowerTransformer
@@ -17,9 +18,9 @@ import pandas as pd
 
 ###############################################################################
 if debug_config.DEBUG_MODE and debug_config.IGNORE_SENTIMENT:
-    _dat_ = pd.read_csv("2-cleaned_data\\dat_518_companies_no_sentiment.csv",index_col = 0)
+    _dat_ = pd.read_csv("2-cleaned_data\\dat_518_companies_no_sentiment.csv",index_col = 0) # TODO
 else:
-    _dat_ = pd.read_csv("2-cleaned_data\\dat_518_companies.csv",index_col = 0)
+    _dat_ = pd.read_parquet(DATA_DIR / "dat_518_companies.parquet")
 ###############################################################################
 
 original_val =  ['return_t','sentiment','PeRatio', 'PsRatio', 'PbRatio','cci','macd','rsi_14','kdjk' ,'wr_14','atr_percent','cmf']
@@ -110,5 +111,4 @@ print('DDA')
 print(sum( np.logical_and((_output_2['Dense_monthly_update_10_year'] < 0),(_output_2['return_t_plus_1'] < 0)) ) / sum(_output_2['return_t_plus_1'] < 0))
 
 _output = _output[['date','ticker','Dense_monthly_update_10_year']].copy()
-_output.to_csv("saved_output\\Dense_monthly_update_10_year.csv")
-
+_output.to_parquet(OUTPUT_DIR / "Dense_monthly_update_10_year.parquet")
