@@ -13,74 +13,62 @@ import pandas as pd
 import numpy as np
 ###############################################################################
 print(f'Parsing: data\\5-filtered_ticker_list.json\ndata\\5-cleaned_stock_data.json\n')
-# ticker_sector = json.loads(open('data\\5-filtered_ticker_list.json').read())
-ticker_sector = json.loads(open('.\\2-cleaned_data\\ticker_sector_information.json').read())
+ticker_sector = pd.read_parquet(Path.cwd().parent / 'data' / 'symbols.parquet')
+ticker_sector = ticker_sector[['symbol', 'gics_sector']].set_index('symbol').to_dict()['gics_sector']
 
-_sector = []
-for ticker in ticker_sector:
-    _sector.append(ticker_sector[ticker]['sector'])
-_sector = list(set(_sector))
-
-stock_dat = json.loads(open('data\\5-cleaned_stock_data.json').read())
+stock_dat = pd.read_parquet(Path.cwd().parent / 'data' / 'ohlc.parquet')
 ###############################################################################
 
-_stock_ = pd.DataFrame()
-for ticker in tqdm(ticker_sector):
-    temp = pd.DataFrame(stock_dat[ticker]).T
-    temp['adj_close'] = np.log(temp['Adj Close'])
-    temp['date'] = pd.to_datetime(temp.index)
-    temp = temp.groupby(pd.Grouper(key = 'date', freq = 'W-FRI')).mean().reset_index()
-    
-    temp = temp.sort_values('date')    
-    temp['date'] = temp['date'].astype(str)
-        
-    temp["return_t"] = temp['adj_close'] - temp['adj_close'].shift()
-    temp["return_t_plus_1"] = temp['adj_close'].shift(-1) - temp['adj_close']
-    
-    temp['sector'] = ticker_sector[ticker]['sector']
-    temp['ticker'] = ticker    
+def parse_ohlc_group(group):
+    group = group.reset_index()
+    group['date'] = pd.to_datetime(group['date'])
+    group['adj_close'] = np.log(group['adjusted_close'])
+    group.drop('symbol', axis='columns', inplace=True)
 
-    temp = temp[['return_t','return_t_plus_1','date','ticker','sector']]
-    _stock_ = pd.concat([_stock_,temp], axis=0)
+    # TODO: wrong way to resample OHLC data?
+    group = group.groupby(pd.Grouper(key = 'date', freq = 'W-FRI')).mean().reset_index() 
 
-_stock_ = _stock_[pd.DatetimeIndex(_stock_['date']).year<2020]
-_stock_ = _stock_[pd.DatetimeIndex(_stock_['date']).year>=2000]
-_stock_ = _stock_.dropna()
+    group["return_t"] = group['adj_close'].diff()
+    group["return_t_plus_1"] = group['adj_close'].diff().shift(-1)
+    group['sector'] = ticker_sector[ticker]
+    return group[['return_t','return_t_plus_1','date','sector']].set_index(['date'])
+
+_stock_ = stock_dat.groupby('symbol').apply(parse_ohlc_group)
+_stock_.reset_index(inplace=True)
+_stock_.rename({'symbol': 'ticker'}, axis=1, inplace=True)
+
+_stock_ = _stock_[(_stock_['date'].dt.year<2020) & (_stock_['date'].dt.year>=2000)]
+_stock_.dropna(inplace=True)
 
 ###############################################################################
 
 print(f'Parsing: data\\6-technical_indicators.json\n')
-technical_indicators = json.loads(open('data\\6-technical_indicators.json').read())
-_technical_indicators_ = pd.DataFrame()
+technical_indicators = pd.read_parquet(Path.cwd().parent / 'data' / 'technical_indicators.parquet')
 
-for ticker in tqdm(ticker_sector):
-    temp = pd.DataFrame(technical_indicators[ticker]) 
-    temp['date'] = pd.to_datetime(temp.index)
-    temp = temp.groupby([pd.Grouper(key = 'date', freq = 'W-FRI')]).median().reset_index()
-    temp['date'] = temp['date'].astype(str)
-    temp['ticker'] = ticker
-    _technical_indicators_ = pd.concat([_technical_indicators_,temp], axis=0)
+def parse_technical_indicator_group(group: pd.DataFrame):
+    group = group.reset_index(inplace=False)
+    group['date'] = pd.to_datetime(group['date'])
+    group.drop('symbol', inplace=True, axis=1)
+    return group.groupby([pd.Grouper(key = 'date', freq = 'W-FRI')]).median() # TODO: shouldn't it be close?
+
+_technical_indicators_ = technical_indicators.groupby(level='symbol').apply(parse_technical_indicator_group)
+_technical_indicators_.reset_index(inplace=True)
+_technical_indicators_.rename({'symbol': 'ticker'}, axis=1, inplace=True)
 
 ###############################################################################
+
+# TODO: missing - need to pull from bloomberg
 
 print(f'Parsing: data\\7-fundamental_indices_data.json\n')
-fundamental_indices = json.loads(open('data\\7-fundamental_indices_data.json').read())
-_fuundamental_indices_ = pd.DataFrame()
+_fuundamental_indices_ = pd.read_parquet(Path.cwd().parent / 'data' / 'fundamental_indices_data.parquet')
+_fuundamental_indices_['date'] = pd.to_datetime(_fuundamental_indices_['date'])
+_fuundamental_indices_ = _fuundamental_indices_[ _fuundamental_indices_['date'] > datetime(1999, 12, 1, 0, 0) ]
+_fuundamental_indices_['date'] = _fuundamental_indices_['date'].astype(str)
 
-for ticker in tqdm(ticker_sector):
-    temp = pd.DataFrame(fundamental_indices[ticker])
-    temp['date'] = pd.to_datetime(temp['date'])
-    temp = temp[ pd.DatetimeIndex(temp['date']) > datetime(1999, 12, 1, 0, 0) ]
-    
-    temp = temp.groupby([pd.Grouper(key = 'date', freq = 'W-FRI')]).median().reset_index()
-    temp['date'] = temp['date'].astype(str)
-    temp['sector'] = ticker_sector[ticker]['sector']
-    temp['ticker'] = ticker
-    temp = temp[['MarketCap','PbRatio','PeRatio','PsRatio','date','sector','ticker']]
-    _fuundamental_indices_ = pd.concat([_fuundamental_indices_,temp], axis=0)
-    
 ###############################################################################
 ''' sentiment data by ticker'''
+
+# TODO: missing
 
 print(f'Parsing: data\\14-cleaned_all_500_company_news_sentiment.json\n')
 sentiment_data =  json.loads(open('data\\14-cleaned_all_500_company_news_sentiment.json').read())
