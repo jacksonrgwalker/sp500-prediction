@@ -8,8 +8,10 @@ import numpy as np
 from tqdm import tqdm
 
 BASE_DIR = Path.cwd().parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = BASE_DIR / 'sp500-prediction' / "data"
 OUTPUT_DIR = BASE_DIR / "saved_output"
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def load_data_and_configs(data_path):
     data = pd.read_csv(data_path, index_col=0)
@@ -72,7 +74,6 @@ print('RMSE:', np.sqrt(np.mean(np.square(_output_2['ARIMA_pred'] - _output_2['re
 print('DA:', np.mean((_output_2['ARIMA_pred'] >= 0) == (_output_2['return_t_plus_1'] >= 0)))
 print('UDA:', sum( np.logical_and((_output_2['ARIMA_pred'] >= 0),(_output_2['return_t_plus_1'] >= 0)) ) / sum(_output_2['return_t_plus_1'] >= 0))
 print('DDA:', sum( np.logical_and((_output_2['ARIMA_pred'] < 0),(_output_2['return_t_plus_1'] < 0)) ) / sum(_output_2['return_t_plus_1'] < 0))
-
 
 _output = _output[['date','ticker','ARIMA_pred']].copy()
 _output['date'] = _output['date'].astype(str)

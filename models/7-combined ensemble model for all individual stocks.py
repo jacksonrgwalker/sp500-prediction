@@ -2,9 +2,12 @@ import  os
 from pathlib import Path
 
 BASE_DIR = Path.cwd().parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = BASE_DIR / 'sp500-prediction' / "data"
 OUTPUT_DIR = BASE_DIR / "saved_output"
 FIGURE_DIR = BASE_DIR / 'figures'
+
+os.makedirs(FIGURE_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 ###############################################################################
 from sklearn.linear_model import LinearRegression
 

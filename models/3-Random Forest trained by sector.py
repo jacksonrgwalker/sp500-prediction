@@ -6,8 +6,10 @@ from pathlib import Path
 # os.chdir(project_dir)
 #os.chdir('change to the mother working directory')
 BASE_DIR = Path.cwd().parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = BASE_DIR / 'sp500-prediction' / "data"
 OUTPUT_DIR = BASE_DIR / "saved_output"
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 ###############################################################################
 from sklearn.ensemble import RandomForestRegressor
@@ -30,13 +32,17 @@ if debug_config.DEBUG_MODE and debug_config.IGNORE_SENTIMENT:
 else:
     _dat_ = pd.read_parquet(DATA_DIR / "dat_518_companies.parquet")
 ###############################################################################
-original_val =  ['return_t','sentiment','PeRatio', 'PsRatio', 'PbRatio','cci','macd','rsi_14','kdjk' ,'wr_14','atr_percent','cmf']
+if debug_config.INCLUDE_MACRO:
+    original_val =  ['return_t','sentiment','PeRatio', 'PsRatio', 'PbRatio','cci','macd','rsi_14','kdjk' ,'wr_14','atr_percent','cmf',
+                     'gold', 'wti', 'EURUSD=X', 'GBPUSD=X', 'LIBOR3M']
+else:
+    original_val =  ['return_t','sentiment','PeRatio', 'PsRatio', 'PbRatio','cci','macd','rsi_14','kdjk' ,'wr_14','atr_percent','cmf']
 output_val = ['return_t_plus_1']
 ###############################################################################
 
 available_years = [item for item in range(2002,2020)]
 
-_sector = _dat_.sector_y.unique()
+_sector = _dat_.sector.unique()
 _output = pd.DataFrame()
 for year in tqdm(available_years):   
     _result = []

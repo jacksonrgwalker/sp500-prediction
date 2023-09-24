@@ -4,10 +4,10 @@ import  os
 from pathlib import Path
 
 BASE_DIR = Path.cwd().parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = BASE_DIR / 'sp500-prediction' / "data"
 OUTPUT_DIR = BASE_DIR / "saved_output"
 
-#os.chdir('change to the mother working directory')
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 ###############################################################################
 from sklearn.preprocessing import PowerTransformer
 from sklearn.model_selection import train_test_split
@@ -25,7 +25,11 @@ else:
     _dat_ = pd.read_parquet(DATA_DIR / "dat_518_companies.parquet")
 _tickers = _dat_.ticker.unique()
 ###############################################################################
-original_val =  ['return_t','sentiment','PeRatio','PsRatio','PbRatio','cci','macdh','rsi_14','kdjk' ,'wr_14','atr_percent','cmf']
+if debug_config.INCLUDE_MACRO:
+    original_val =  ['return_t','sentiment','PeRatio','PsRatio','PbRatio','cci','macdh','rsi_14','kdjk' ,'wr_14','atr_percent','cmf',
+                     'gold', 'wti', 'EURUSD=X', 'GBPUSD=X', 'LIBOR3M']
+else:
+    original_val =  ['return_t','sentiment','PeRatio','PsRatio','PbRatio','cci','macdh','rsi_14','kdjk' ,'wr_14','atr_percent','cmf']
 output_val = ['return_t_plus_1']
 
 ###############################################################################

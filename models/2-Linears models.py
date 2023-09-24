@@ -6,10 +6,11 @@ from sklearn.preprocessing import PowerTransformer
 import numpy as np
 import json
 from tqdm import tqdm
+import debug_config
 
 # Define data directories
 BASE_DIR = Path.cwd().parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = BASE_DIR / 'sp500-prediction' / "data"
 OUTPUT_DIR = BASE_DIR / "saved_output"
 
 # Function to preprocess data
@@ -41,7 +42,11 @@ def train_and_evaluate(train_df, test_df, original_val, output_val):
 _dat_ = pd.read_parquet(DATA_DIR / "dat_518_companies.parquet")
 ###############################################################################
 '''trained using all stock data combined'''
-original_val =  ['return_t','sentiment','cci','macdh','rsi_14','kdjk' ,'wr_14','cmf']
+if debug_config.INCLUDE_MACRO:
+    original_val =  ['return_t','sentiment','cci','macdh','rsi_14','kdjk' ,'wr_14','cmf',
+                     'gold', 'wti', 'EURUSD=X', 'GBPUSD=X', 'LIBOR3M']
+else:
+    original_val =  ['return_t','sentiment','cci','macdh','rsi_14','kdjk' ,'wr_14','cmf']
 output_val = ['return_t_plus_1']
 
 year_gap = 10
@@ -88,11 +93,12 @@ print(sum( np.logical_and((_output_2['LR_pred'] >= 0),(_output_2['return_t_plus_
 print('DDA')
 print(sum( np.logical_and((_output_2['LR_pred'] < 0),(_output_2['return_t_plus_1'] < 0)) ) / sum(_output_2['return_t_plus_1'] < 0))
 
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 _output = _output[['date','ticker','LR_pred']].copy()
 # _output.to_csv(OUTPUT_DIR / "LR_pred.csv")
 _output.to_parquet(OUTPUT_DIR / "LR_pred.parquet")
 ###############################################################################
-_sector = _dat_.sector_y.unique()
+_sector = _dat_.sector.unique()
 _tickers = _dat_.ticker.unique()
 
 ###############################################################################
@@ -100,8 +106,11 @@ _tickers = _dat_.ticker.unique()
 ###############################################################################
 # _dat_ = pd.read_csv("2-cleaned_data\\dat_518_companies.csv")
 ###############################################################################
-
-original_val =  ['return_t','sentiment','cci','macdh','rsi_14','kdjk' ,'wr_14','cmf']
+if debug_config.INCLUDE_MACRO:
+    original_val =  ['return_t','sentiment','cci','macdh','rsi_14','kdjk' ,'wr_14','cmf',
+                     'gold', 'wti', 'EURUSD=X', 'GBPUSD=X', 'LIBOR3M']
+else:
+    original_val =  ['return_t','sentiment','cci','macdh','rsi_14','kdjk' ,'wr_14','cmf']
 output_val = ['return_t_plus_1']
 
 available_years = [item for item in range(2002,2020)]
@@ -159,7 +168,11 @@ print(sum( np.logical_and((_output['LR_pred'] < 0),(_output['return_t_plus_1'] <
 # _dat_ = pd.read_csv("2-cleaned_data\\dat_518_companies.csv")
 ###############################################################################
 available_years = [item for item in range(2002,2020)]
-original_val =  ['return_t','cci','macdh','rsi_14','kdjk','wr_14','cmf','PeRatio', 'PsRatio', 'PbRatio']
+if debug_config.INCLUDE_MACRO:
+    original_val =  ['return_t','cci','macdh','rsi_14','kdjk','wr_14','cmf','PeRatio', 'PsRatio', 'PbRatio',
+                     'gold', 'wti', 'EURUSD=X', 'GBPUSD=X', 'LIBOR3M']
+else:
+    original_val =  ['return_t','cci','macdh','rsi_14','kdjk','wr_14','cmf','PeRatio', 'PsRatio', 'PbRatio']
 output_val = ['return_t_plus_1']
 
 yearly_report_RMSE = []

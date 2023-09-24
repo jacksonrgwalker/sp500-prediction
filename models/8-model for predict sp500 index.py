@@ -4,7 +4,7 @@ import  os
 from pathlib import Path
 
 BASE_DIR = Path.cwd().parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = BASE_DIR / 'sp500-prediction' / "data"
 OUTPUT_DIR = BASE_DIR / "saved_output"
 FIGURE_DIR = BASE_DIR / 'figures'
 ###############################################################################
@@ -21,12 +21,15 @@ import pandas as pd
 if debug_config.DEBUG_MODE and debug_config.IGNORE_SENTIMENT:
     _dat_ = pd.read_csv("2-cleaned_data\\dat_sp500_index_no_sentiment.csv",index_col = 0)
 else:
-    _dat_ = pd.read_parquet(DATA_DIR / "dat_518_companies.parquet")
+    _dat_ = pd.read_parquet(DATA_DIR / "dat_sp500_index.parquet")
 ###############################################################################
 
 available_years = [item for item in range(2003,2020)]
-
-original_val =  ['return_t','spsentiment','PeRatio', 'PsRatio', 'PbRatio','cci','macdh','rsi_14','kdjk' ,'wr_14','atr_percent','cmf']
+if debug_config.INCLUDE_MACRO:
+    original_val =  ['return_t','spsentiment','PeRatio','PsRatio','PbRatio','cci','macdh','rsi_14','kdjk' ,'wr_14','atr_percent','cmf',
+                     'gold', 'wti', 'EURUSD=X', 'GBPUSD=X', 'LIBOR3M']
+else:
+    original_val =  ['return_t','spsentiment','PeRatio','PsRatio','PbRatio','cci','macdh','rsi_14','kdjk' ,'wr_14','atr_percent','cmf']
 output_val = ['return_t_plus_1']
 
 _output = pd.DataFrame()

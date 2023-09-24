@@ -3,9 +3,11 @@ import  os
 from pathlib import Path
 
 BASE_DIR = Path.cwd().parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = BASE_DIR / 'sp500-prediction' / "data"
 OUTPUT_DIR = BASE_DIR / "saved_output"
 
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(Path.cwd() / 'saved_models', exist_ok=True)
 ###############################################################################
 from sklearn.preprocessing import PowerTransformer
 import tensorflow as tf
@@ -23,7 +25,11 @@ else:
     _dat_ = pd.read_parquet(DATA_DIR / "dat_518_companies.parquet")
 ###############################################################################
 
-original_val =  ['return_t','sentiment','PeRatio', 'PsRatio', 'PbRatio','cci','macd','rsi_14','kdjk' ,'wr_14','atr_percent','cmf']
+if debug_config.INCLUDE_MACRO:
+    original_val =  ['return_t','sentiment','PeRatio', 'PsRatio', 'PbRatio','cci','macd','rsi_14','kdjk' ,'wr_14','atr_percent','cmf',
+                     'gold', 'wti', 'EURUSD=X', 'GBPUSD=X', 'LIBOR3M']
+else:
+    original_val =  ['return_t','sentiment','PeRatio', 'PsRatio', 'PbRatio','cci','macd','rsi_14','kdjk' ,'wr_14','atr_percent','cmf']
 output_val = ['return_t_plus_1']
 
 ###############################################################################
@@ -79,8 +85,9 @@ for year in tqdm(available_years):
         _validate_X = np.asarray(train_df[original_val].iloc[test_index]  )
         _validate_y = np.asarray(train_df[output_val].iloc[test_index])
         
-        _train = tf.data.Dataset.from_tensor_slices((_train_X,_train_y)).batch(2048)
-        _validate = tf.data.Dataset.from_tensor_slices((_validate_X,_validate_y)).batch(2048)
+        print()
+        _train = tf.data.Dataset.from_tensor_slices((_train_X.astype(float),_train_y.astype(float))).batch(2048)
+        _validate = tf.data.Dataset.from_tensor_slices((_validate_X.astype(float),_validate_y.astype(float))).batch(2048)
         
         _test_X =  np.asarray(test_df[original_val])
         _test_y =  np.asarray(test_df[output_val])
