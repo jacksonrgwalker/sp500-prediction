@@ -190,10 +190,3 @@ else:
 # With the best model determined, predict the labels for the dataset
 scaled_X = scaler1.fit_transform(X).astype(np.float32)
 labels = best_model.predict(scaled_X)
-
-# Create a DataFrame to store the sentiment
-sentiment_df = pd.DataFrame(labels, columns=['sentiment_score'], index=combined_df.index)
-
-# Save the table
-sentiment_save_path = Path("data/sentiment.parquet")
-sentiment_df.to_parquet(sentiment_save_path)
